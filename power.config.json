@@ -1,0 +1,24 @@
+{
+  "version": "1.0",
+  "appId": "2fd76be6-c160-4b03-bfc8-91b635c9ffaf",
+  "appDisplayName": "Fantasy Draft Helper",
+  "region": "prod",
+  "environmentId": "a78eda8d-64fc-edc7-b10c-5d544639af81",
+  "description": "",
+  "buildPath": "./dist",
+  "buildEntryPoint": "index.html",
+  "localAppUrl": "http://localhost:3000",
+  "logoPath": "Default",
+  "connectionReferences": {},
+  "databaseReferences": {
+    "default.cds": {
+      "dataSources": {
+        "nbaplayerstats": {
+          "entitySetName": "eamon_nbaplayerstatses",
+          "logicalName": "eamon_nbaplayerstats"
+        }
+      },
+      "environmentVariableName": ""
+    }
+  }
+}
