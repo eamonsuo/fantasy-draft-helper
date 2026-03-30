@@ -64,12 +64,13 @@ export function useDataRefresh() {
       console.log("[refresh] Fetching all NBA API games…");
       let playerSeasonMap = new Map<string, Map<number, import("@/api/nbaapi").NbaGameEntry[]>>();
       let nameToNbaId = new Map<string, string>();
+      let firstInitialLastNameToNbaId = new Map<string, string>();
       try {
         const allGames = await fetchAllNbaGames((fetched, total) => {
           setProgress((prev) => ({ ...prev, currentPlayer: `Loading game data… ${fetched}/${total}` }));
         });
         console.log("[refresh] NBA API games fetched:", allGames.length);
-        ({ playerSeasonMap, nameToNbaId } = buildPlayerSeasonMap(allGames));
+        ({ playerSeasonMap, nameToNbaId, firstInitialLastNameToNbaId } = buildPlayerSeasonMap(allGames));
         console.log("[refresh] Players in game data:", playerSeasonMap.size);
       } catch (err) {
         console.error("[refresh] fetchAllNbaGames failed:", err);
@@ -89,8 +90,16 @@ export function useDataRefresh() {
         const player = players[i];
         setProgress({ current: i + 1, total, currentPlayer: player.fullName, stage: "processing" });
         try {
-          // Sleeper uses numeric IDs; NBA API uses bbref-style IDs — always resolve via name map
-          const nbaId = nameToNbaId.get(normalizeNbaPlayerName(player.fullName)) ?? null;
+          // Sleeper uses numeric IDs; NBA API uses bbref-style IDs — resolve via name map with fallbacks
+          let nbaId = nameToNbaId.get(normalizeNbaPlayerName(player.fullName)) ?? null;
+
+          // Fallback 1: first initial + last name (handles suffix mismatches and minor first-name differences)
+          if (!nbaId && player.firstName && player.lastName) {
+            const firstInitial = normalizeNbaPlayerName(player.firstName[0]);
+            const lastName = normalizeNbaPlayerName(player.lastName);
+            nbaId = firstInitialLastNameToNbaId.get(firstInitial + lastName) ?? null;
+          }
+
           if (!nbaId) {
             console.warn(`[refresh] No NBA API match for: ${player.fullName} (sleeperId=${player.playerId})`);
           }

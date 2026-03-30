@@ -86,6 +86,11 @@ export function normalizeNbaPlayerName(name: string): string {
     .replace(/[^a-z0-9]/g, "");
 }
 
+/** Strip common name suffixes (Jr, Sr, I, II, III, IV, V) before normalizing. */
+function stripNameSuffix(name: string): string {
+  return name.replace(/\s+(jr\.?|sr\.?|iii|ii|iv|v|i)$/i, "").trim();
+}
+
 export interface NbaGameEntry {
   date: string;
   stats: NbaApiPlayerGameBasicStat;
@@ -94,14 +99,17 @@ export interface NbaGameEntry {
 /**
  * From a flat list of game responses, build two lookup structures:
  *  - playerSeasonMap: nbaPlayerId → seasonYear → NbaGameEntry[]
- *  - nameToNbaId: normalizedName → nbaPlayerId
+ *  - nameToNbaId: normalizedName → nbaPlayerId (exact + suffix-stripped variants)
+ *  - firstInitialLastNameToNbaId: firstInitial+normalizedLastName → nbaPlayerId (fallback)
  */
 export function buildPlayerSeasonMap(games: NbaApiGameResponse[]): {
   playerSeasonMap: Map<string, Map<number, NbaGameEntry[]>>;
   nameToNbaId: Map<string, string>;
+  firstInitialLastNameToNbaId: Map<string, string>;
 } {
   const playerSeasonMap = new Map<string, Map<number, NbaGameEntry[]>>();
   const nameToNbaId = new Map<string, string>();
+  const firstInitialLastNameToNbaId = new Map<string, string>();
 
   for (const game of games) {
     const season = gameSeasonYear(game.date);
@@ -110,7 +118,26 @@ export function buildPlayerSeasonMap(games: NbaApiGameResponse[]): {
       if (!playerId) continue;
 
       if (playerName) {
-        nameToNbaId.set(normalizeNbaPlayerName(playerName), playerId);
+        const normalized = normalizeNbaPlayerName(playerName);
+        nameToNbaId.set(normalized, playerId);
+
+        // Also index the suffix-stripped variant (e.g. "Gary Trent" for "Gary Trent Jr.")
+        const noSuffix = normalizeNbaPlayerName(stripNameSuffix(playerName));
+        if (noSuffix !== normalized) {
+          nameToNbaId.set(noSuffix, playerId);
+        }
+
+        // Index first-initial + last-name for partial-match fallback
+        const parts = playerName.trim().split(/\s+/);
+        if (parts.length >= 2) {
+          const firstInitial = normalizeNbaPlayerName(parts[0][0]);
+          const lastName = normalizeNbaPlayerName(parts.slice(1).join(" "));
+          // Only store if not already taken by a different player (avoid ambiguous keys)
+          const key = firstInitial + lastName;
+          if (!firstInitialLastNameToNbaId.has(key)) {
+            firstInitialLastNameToNbaId.set(key, playerId);
+          }
+        }
       }
 
       if (!playerSeasonMap.has(playerId)) playerSeasonMap.set(playerId, new Map());
@@ -120,5 +147,5 @@ export function buildPlayerSeasonMap(games: NbaApiGameResponse[]): {
     }
   }
 
-  return { playerSeasonMap, nameToNbaId };
+  return { playerSeasonMap, nameToNbaId, firstInitialLastNameToNbaId };
 }
